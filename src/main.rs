@@ -24,14 +24,15 @@ fn main() {
     let info_table = OPCODE_INFO_JUMPTABLE;
     let instruction_table = make_instruction_table::<DummyHost, CancunSpec>();
 
-    interpreter.instruction_pointer = 1 as *const u8; // PC to run
-
     let mut elapsed_map: HashMap<&str, u128> = HashMap::new();
     for _ in 0..ITERATIONS {
         for (index, instruction) in instruction_table.iter().enumerate() {
-            if index == 96 {
-                break;
+            if index == 88 { 
+                // this is the opcode for program counter instruction. It expects the instruction counter 
+                // to be offset by 1.
+                interpreter.instruction_pointer = unsafe { interpreter.instruction_pointer.offset(1) };
             }
+
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
                 let now = Instant::now();
