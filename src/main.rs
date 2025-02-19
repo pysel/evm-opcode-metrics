@@ -14,6 +14,9 @@ use revm_interpreter::{
     Contract, DummyHost,
 };
 
+use std::hint::black_box;
+
+
 const ITERATIONS: usize = 100;
 
 fn main() {
@@ -36,7 +39,7 @@ fn main() {
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
                 let now = Instant::now();
-                instruction(&mut interpreter, &mut host);
+                black_box(instruction(&mut interpreter, &mut host));
                 let elapsed = now.elapsed().as_nanos();
 
                 // Add elapsed time for this run to the total time for this opcode
