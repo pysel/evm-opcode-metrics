@@ -15,7 +15,9 @@ use criterion_cycles_per_byte::CyclesPerByte;
 
 const ITERATIONS: usize = 10;
 
-pub fn criterion_benchmark(c: &mut Criterion) {
+pub fn criterion_benchmark(c: &mut Criterion<CyclesPerByte>) {
+    let mut group = c.benchmark_group("opcodes");
+
     let evm = Evm::builder().build();
     let mut interpreter = Interpreter::new(Contract::default(), 1_000_000, false);
     let mut host = DummyHost::new(*evm.context.evm.env.clone());
@@ -34,7 +36,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let op_code_info = info_table[index];
         if let Some(op_code_info) = op_code_info {
             let now = Instant::now();
-            c.bench_function(op_code_info.name(), |b| b.iter(|| instruction(&mut interpreter, &mut host)));
+            group.bench_function(op_code_info.name(), |b| b.iter(|| instruction(&mut interpreter, &mut host)));
             
             let elapsed = now.elapsed().as_nanos();
             // Collect elapsed times in the vector for this opcode
@@ -43,6 +45,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                     .push(elapsed);
         }
     }
+    group.finish();
 }
 
 criterion_group!(
