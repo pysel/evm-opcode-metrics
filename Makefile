@@ -12,3 +12,6 @@ push:
 	git add -A
 	git commit -m "(minor auto) update"
 	git push space
+
+parse:
+	python3 parser.py
