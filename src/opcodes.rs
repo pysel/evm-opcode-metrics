@@ -108,9 +108,9 @@ pub fn opcodes_cycles() {
 
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
-                let start = _rdtsc();
+                let start = unsafe { _rdtsc() };
                 black_box(instruction(&mut interpreter, &mut host));
-                let end = _rdtsc();
+                let end = unsafe { _rdtsc() };
                 
                 let elapsed = end - start;
                 // Collect elapsed times in the vector for this opcode
