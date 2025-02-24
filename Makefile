@@ -10,5 +10,5 @@ setup:
 
 push:
 	git add -A
-	git commit -m "update"
+	git commit -m "(minor auto) update"
 	git push space
