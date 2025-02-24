@@ -10,7 +10,6 @@ use revm_interpreter::{
     opcode::make_instruction_table,
     Contract, DummyHost
 };
-use criterion::black_box;
 use core::arch::x86_64::_rdtsc;
 
 
@@ -36,7 +35,7 @@ pub fn opcodes_time() {
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
                 let now = Instant::now();
-                black_box(instruction(&mut interpreter, &mut host));
+                instruction(&mut interpreter, &mut host);
                 
                 let elapsed = now.elapsed().as_nanos();
                 // Collect elapsed times in the vector for this opcode
@@ -109,7 +108,7 @@ pub fn opcodes_cycles() {
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
                 let start = unsafe { _rdtsc() };
-                black_box(instruction(&mut interpreter, &mut host));
+                instruction(&mut interpreter, &mut host);
                 let end = unsafe { _rdtsc() };
                 
                 let elapsed = end - start;
