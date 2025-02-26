@@ -15,3 +15,6 @@ push:
 
 parse-cycles:
 	python3 parser-cycles.py
+
+parse-time:
+	python3 parser-time.py
