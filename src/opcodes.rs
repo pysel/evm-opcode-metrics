@@ -160,3 +160,4 @@ pub fn opcodes_cycles() {
     }
     wtr.flush().unwrap();
 }
+
