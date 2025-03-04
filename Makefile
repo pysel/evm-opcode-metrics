@@ -7,6 +7,7 @@ bench:
 setup:
 	curl https://sh.rustup.rs -sSf | sh
 	. "$$HOME/.cargo/env"
+	@source ~/.bashrc
 
 push:
 	git add -A
