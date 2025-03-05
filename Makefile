@@ -24,3 +24,6 @@ push:
 
 parse:
 	python3 parser.py
+
+fetch-benchmark:
+	scp springfield:benchmark_output.txt benchmark_output.txt
