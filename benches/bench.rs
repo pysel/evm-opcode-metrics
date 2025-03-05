@@ -11,7 +11,6 @@ use revm_interpreter::{
     opcode::make_instruction_table,
     Contract, DummyHost
 };
-use criterion_cycles_per_byte::CyclesPerByte;
 
 const ITERATIONS: usize = 10;
 

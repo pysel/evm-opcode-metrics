@@ -1,5 +1,5 @@
-use opcodes_analysis::opcodes::opcodes_cycles;
+// use opcodes_analysis::opcodes::opcodes_cycles;
 
 fn main() {
-    opcodes_cycles();
+    // opcodes_cycles();
 }
