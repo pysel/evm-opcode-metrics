@@ -10,8 +10,15 @@ use revm_interpreter::{
     opcode::make_instruction_table,
     Contract, DummyHost
 };
-use core::arch::x86_64::_rdtsc;
 
+#[inline(always)]
+fn read_cpu_cycle() -> u64 {
+    let value: u64;
+    unsafe {
+        core::arch::asm!("mrs {}, PMCCNTR_EL0", out(reg) value);
+    }
+    value
+}
 
 const ITERATIONS: usize = 10;
 
@@ -107,9 +114,9 @@ pub fn opcodes_cycles() {
 
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
-                let start = unsafe { _rdtsc() };
+                let start = read_cpu_cycle();
                 instruction(&mut interpreter, &mut host);
-                let end = unsafe { _rdtsc() };
+                let end = read_cpu_cycle();
                 
                 let elapsed = end - start;
                 // Collect elapsed times in the vector for this opcode

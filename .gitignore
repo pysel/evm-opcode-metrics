@@ -2,5 +2,5 @@
 avg-opcode-time.csv
 bench-results.json
 benchmark_output.txt
-avg-opcode-cycles.csv
+avg-opcode-**
 .env
