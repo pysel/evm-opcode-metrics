@@ -20,5 +20,5 @@ def filter_csv(file1, file2, output_file):
             if row[0] in keys_in_file2:
                 writer.writerow(row)
 
-# Example usage
-filter_csv('avg-opcode-cycles.csv', 'opcode_table.csv', 'avg-opcode-cycles1.csv')
+# File to filter | File to match keys | Output file
+filter_csv('avg-opcode-time-arm.csv', 'opcode_table.csv', 'avg-opcode-time-arm1.csv')
