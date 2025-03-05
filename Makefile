@@ -6,7 +6,11 @@ bench:
 
 setup:
 	curl https://sh.rustup.rs -sSf | sh
-	. "$$HOME/.cargo/env"
+	. "${HOME}/.cargo/env"
+	
+setup-pi: setup
+	mkdir /mnt/sda
+	mount /dev/mmcblk0p2 /mnt/sda
 
 push:
 	git add -A
