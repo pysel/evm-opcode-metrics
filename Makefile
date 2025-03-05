@@ -11,6 +11,11 @@ setup:
 setup-pi: setup
 	mkdir /mnt/sda
 	mount /dev/mmcblk0p2 /mnt/sda
+	mv ~/.cargo/registry /mnt/sda/cargo/
+	export CARGO_HOME="${HOME}/.cargo"
+	export CARGO_REGISTRY_DIR="/mnt/sda/cargo/registry"
+	export CARGO_TARGET_DIR="/mnt/sda/target"
+	source ~/.bashrc
 
 push:
 	git add -A
