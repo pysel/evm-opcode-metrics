@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{arch::asm, time::Instant};
 use std::collections::HashMap;
 use csv::Writer;
 use revm::{
@@ -11,13 +11,16 @@ use revm_interpreter::{
     Contract, DummyHost
 };
 
-#[inline(always)]
-fn read_cpu_cycle() -> u64 {
-    let value: u64;
+// this might return illegal instruction error, need to enable permissions
+fn read_counter() -> u32 {
+    let cc: u32;
     unsafe {
-        core::arch::asm!("mrs {}, PMCCNTR_EL0", out(reg) value);
+        asm!(
+            "mrc p15, 0, {0}, c9, c13, 0",
+            out(reg) cc
+        );
     }
-    value
+    cc
 }
 
 const ITERATIONS: usize = 10;
@@ -41,9 +44,9 @@ pub fn opcodes_cycles() {
 
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
-                let start = read_cpu_cycle();
+                let start = read_counter() as u64;
                 instruction(&mut interpreter, &mut host);
-                let end = read_cpu_cycle();
+                let end = read_counter() as u64;
                 
                 let elapsed = end - start;
                 // Collect elapsed times in the vector for this opcode

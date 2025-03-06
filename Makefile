@@ -1,5 +1,5 @@
 run:
-	nice -n -20 cargo run --jobs 1
+	RUSTFLAGS="-C target-cpu=native" nice -n -20 cargo run --jobs 1
 
 bench:
 	cargo bench --jobs 1 > benchmark_output.txt
