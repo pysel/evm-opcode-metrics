@@ -1,6 +1,8 @@
+run-pi:
+	CARGO_TARGET_DIR=/mnt/sda/target nice -n -20 cargo run --jobs 1
+
 run:
 	nice -n -20 cargo run --jobs 1
-
 bench:
 	cargo bench --jobs 1 > benchmark_output.txt
 
