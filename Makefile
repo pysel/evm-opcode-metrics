@@ -29,3 +29,6 @@ parse:
 
 fetch-benchmark:
 	scp springfield:benchmark_output.txt benchmark_output.txt
+
+fetch:
+	scp springfield:avg-opcode-cycles-arm.csv avg-opcode-cycles-arm.csv

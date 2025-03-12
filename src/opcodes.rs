@@ -1,25 +1,54 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 use std::collections::HashMap;
 use csv::Writer;
+use revm::primitives::bitvec::order::Lsb0;
+use revm::primitives::bitvec::vec::BitVec;
+use revm::primitives::bytes::Bytes;
+use revm::primitives::{Eof, JumpTable, LegacyAnalyzedBytecode};
 use revm::{
     interpreter::{Interpreter, OPCODE_INFO_JUMPTABLE},
-    primitives::CancunSpec,
+    primitives::{Bytecode, CancunSpec, U256},
     Evm
 };
 use revm_interpreter::{
     opcode::make_instruction_table,
     Contract, DummyHost
 };
+use revm_primitives::Address;
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use core::arch::x86_64::_rdtsc;
 
 
-const ITERATIONS: usize = 10;
+const ITERATIONS: usize = 1;
 
 pub fn opcodes_time() {
     let evm = Evm::builder().build();
-    let mut interpreter = Interpreter::new(Contract::default(), 1_000_000, false);
+    // let mut contract = Contract::default();
+    let eof = Arc::new(Eof::default());
+
+    // let bytecode = Bytecode::LegacyAnalyzed(LegacyAnalyzedBytecode::default());
+    // let jump_table = bytecode.legacy_jump_table().unwrap();
+    let mut bit_vec: BitVec<u8, Lsb0> = BitVec::new();
+    bit_vec.push(true);
+    bit_vec.push(true);
+    let jump_table = JumpTable::from_slice(bit_vec.as_raw_slice());
+    println!("{}", jump_table.is_valid(1));
+
+    let bytecode = LegacyAnalyzedBytecode::new(revm_primitives::Bytes(Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])), 1, jump_table);
+    let bytecode_ptr = bytecode.bytecode().as_ptr();
+    let contract = Contract::new(revm_primitives::Bytes::default(), Bytecode::LegacyAnalyzed(bytecode), None, Address::ZERO, None, Address::ZERO, U256::ZERO);
+
+    // return;
+    
+    let mut interpreter = Interpreter::new(contract, 1_000_000_000, false);
     let mut host = DummyHost::new(*evm.context.evm.env.clone());
 
+    // interpreter.is_eof = true;
+    for _ in 0..1000 {
+        interpreter.stack.push(U256::from(0));
+    }
+    
     let info_table = OPCODE_INFO_JUMPTABLE;
     let instruction_table = make_instruction_table::<DummyHost, CancunSpec>();
 
@@ -29,19 +58,37 @@ pub fn opcodes_time() {
             if index == 88 { 
                 // this is the opcode for program counter instruction. It expects the instruction counter 
                 // to be offset by 1.
-                interpreter.instruction_pointer = unsafe { interpreter.instruction_pointer.offset(1) };
+                interpreter.instruction_pointer = bytecode_ptr.wrapping_add(1);
+
+                println!("DATA: {:?}", unsafe { core::slice::from_raw_parts(interpreter.instruction_pointer, 1) });
             }
 
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
+                if op_code_info.name() == "LOG0" {
+                    for _ in 0..30 {
+                        interpreter.stack.push(U256::from(1));
+                    }
+                    println!("{}", interpreter.stack.len());
+                }
+
                 let now = Instant::now();
                 instruction(&mut interpreter, &mut host);
                 
                 let elapsed = now.elapsed().as_nanos();
+
+                println!("{}: {:?}", op_code_info.name(), interpreter.instruction_result);
                 // Collect elapsed times in the vector for this opcode
                 elapsed_map.entry(op_code_info.name())
                         .or_insert_with(Vec::new)
                         .push(elapsed);
+
+            }
+
+            if index == 88 { 
+                // this is the opcode for program counter instruction. It expects the instruction counter 
+                // to be offset by 1.
+                interpreter.instruction_pointer = bytecode_ptr;
             }
         }
     }
@@ -87,7 +134,7 @@ pub fn opcodes_time() {
     wtr.flush().unwrap();
 }
 
-
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub fn opcodes_cycles() {
     let evm = Evm::builder().build();
     let mut interpreter = Interpreter::new(Contract::default(), 1_000_000, false);
@@ -160,3 +207,12 @@ pub fn opcodes_cycles() {
     }
     wtr.flush().unwrap();
 }
+
+
+// fn get_bytecode() -> Bytecode {
+//     let buf: Bytes = Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    
+//     // Create the bytecode using the new_analyzed method
+//     let bytecode = Bytecode::LegacyRaw(buf);
+//     bytecode
+// }
