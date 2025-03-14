@@ -1,9 +1,11 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use revm_primitives::{bitvec::{order::Lsb0, vec::BitVec}, Address, Bytecode, JumpTable, LegacyAnalyzedBytecode, U256};
+use revm_primitives::{bitvec::{order::Lsb0, vec::BitVec}, eof::TypesSection, Address, Bytecode, JumpTable, LegacyAnalyzedBytecode, U256};
 use revm::primitives::bytes::Bytes;
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 use std::collections::HashMap;
 use csv::Writer;
+use revm::primitives::{Eof};
+
 use revm::{
     interpreter::{Interpreter, OPCODE_INFO_JUMPTABLE},
     primitives::CancunSpec,
@@ -18,13 +20,106 @@ use revm_interpreter::{
 
 const ITERATIONS: usize = 10;
 
+const DIRTY_STACK_OPCODES: [&str; 11] = [
+    "LOG0", "LOG1", "LOG2", "LOG3", "LOG4", "CALL", "CALLCODE", "DELEGATECALL", "STATICCALL", "CREATE2", "CREATE"
+];
+
+const EOF_OPCODES: [&str; 18] = [
+    "DATALOAD",
+    "DATALOADN",
+    "DATASIZE",
+    "DATACOPY",
+    "RJUMP",
+    "RJUMPI",
+    "RJUMPV",
+    "CALLF",
+    "RETF",
+    "JUMPF",
+    "DUPN",
+    "SWAPN",
+    "EXCHANGE",
+    "EOFCREATE",
+    "RETURNDATALOAD",
+    "EXTCALL",
+    "EXTDELEGATECALL",
+    "EXTSTATICCALL",
+];
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let evm = Evm::builder().build();
     // let mut contract = Contract::default();
     // let eof = Arc::new(Eof::default());
 
-    // let bytecode = Bytecode::LegacyAnalyzed(LegacyAnalyzedBytecode::default());
-    // let jump_table = bytecode.legacy_jump_table().unwrap();
+    
+    let (interpreter_legacy, bytecode_ptr) = get_legacy_analyzed_interpreter();
+
+    let mut interpreter_eof = get_eof_interpreter();
+
+    let mut interpreter = interpreter_legacy;
+
+    let mut host = DummyHost::new(*evm.context.evm.env.clone());
+
+    // interpreter.is_eof = true;
+    for _ in 0..500 {
+        let _ = interpreter.stack.push(U256::from(0));
+        let _ = interpreter_eof.stack.push(U256::from(0));
+    }
+    
+    let info_table = OPCODE_INFO_JUMPTABLE;
+    let instruction_table = make_instruction_table::<DummyHost, CancunSpec>();
+
+    let mut elapsed_map: HashMap<&str, Vec<u128>> = HashMap::new();
+    for (index, instruction) in instruction_table.iter().enumerate() {
+        if index == 88 { 
+            // this is the opcode for program counter instruction. It expects the instruction counter 
+            // to be offset by 1.
+            interpreter.instruction_pointer = bytecode_ptr.wrapping_add(1);
+
+            println!("DATA: {:?}", unsafe { core::slice::from_raw_parts(interpreter.instruction_pointer, 1) });
+        }
+
+        let op_code_info = info_table[index];
+        if let Some(op_code_info) = op_code_info {
+            if DIRTY_STACK_OPCODES.contains(&op_code_info.name()) {
+                for _ in 0..7 {
+                    let _ = interpreter.stack.push(U256::from(1));
+                }
+            }
+
+            if EOF_OPCODES.contains(&op_code_info.name()) {
+                for _ in 0..7 {
+                    let _ = interpreter_eof.stack.push(U256::from(0));
+                }
+                instruction(&mut interpreter_eof, &mut host);
+                println!("{}: {:?}", op_code_info.name(), interpreter_eof.instruction_result);
+                continue;
+            } else {
+                interpreter.is_eof = false;
+            }
+
+            let now = Instant::now();
+            c.bench_function(op_code_info.name(), |b| b.iter(|| instruction(&mut interpreter, &mut host)));
+            
+            let elapsed = now.elapsed().as_nanos();
+
+            println!("{}: {:?}", op_code_info.name(), interpreter.instruction_result);
+            // Collect elapsed times in the vector for this opcode
+            elapsed_map.entry(op_code_info.name())
+                    .or_insert_with(Vec::new)
+                    .push(elapsed);
+
+        }
+
+        if index == 88 { 
+            // this is the opcode for program counter instruction. It expects the instruction counter 
+            // to be offset by 1.
+            interpreter.instruction_pointer = bytecode_ptr;
+        }
+    }
+}
+
+
+fn get_legacy_analyzed_interpreter() -> (Interpreter, *const u8) {
     let mut bit_vec: BitVec<u8, Lsb0> = BitVec::new();
     bit_vec.push(true);
     bit_vec.push(true);
@@ -37,98 +132,27 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     // return;
     
-    let mut interpreter = Interpreter::new(contract, 1_000_000_000, false);
-    let mut host = DummyHost::new(*evm.context.evm.env.clone());
-
-    // interpreter.is_eof = true;
-    for _ in 0..1000 {
-        interpreter.stack.push(U256::from(0));
-    }
-    
-    let info_table = OPCODE_INFO_JUMPTABLE;
-    let instruction_table = make_instruction_table::<DummyHost, CancunSpec>();
-
-    let mut elapsed_map: HashMap<&str, Vec<u128>> = HashMap::new();
-    for _ in 0..ITERATIONS {
-        for (index, instruction) in instruction_table.iter().enumerate() {
-            if index == 88 { 
-                // this is the opcode for program counter instruction. It expects the instruction counter 
-                // to be offset by 1.
-                interpreter.instruction_pointer = bytecode_ptr.wrapping_add(1);
-
-                println!("DATA: {:?}", unsafe { core::slice::from_raw_parts(interpreter.instruction_pointer, 1) });
-            }
-
-            let op_code_info = info_table[index];
-            if let Some(op_code_info) = op_code_info {
-                if op_code_info.name() == "LOG0" {
-                    for _ in 0..30 {
-                        interpreter.stack.push(U256::from(1));
-                    }
-                    println!("{}", interpreter.stack.len());
-                }
-
-                let now = Instant::now();
-                c.bench_function(op_code_info.name(), |b| b.iter(|| instruction(&mut interpreter, &mut host)));
-                
-                let elapsed = now.elapsed().as_nanos();
-
-                println!("{}: {:?}", op_code_info.name(), interpreter.instruction_result);
-                // Collect elapsed times in the vector for this opcode
-                elapsed_map.entry(op_code_info.name())
-                        .or_insert_with(Vec::new)
-                        .push(elapsed);
-
-            }
-
-            if index == 88 { 
-                // this is the opcode for program counter instruction. It expects the instruction counter 
-                // to be offset by 1.
-                interpreter.instruction_pointer = bytecode_ptr;
-            }
-        }
-    }
-
-    let mut elapsed_avg_map: HashMap<&str, u128> = HashMap::new();
-    let mut elapsed_median_map: HashMap<&str, u128> = HashMap::new();
-
-    for (opcode, times) in &elapsed_map {
-        // Compute average
-        let sum: u128 = times.iter().sum();
-        let avg = sum / ITERATIONS as u128;
-        elapsed_avg_map.insert(*opcode, avg);
-
-        // Compute median
-        let mut sorted_times = times.clone();
-        sorted_times.sort();
-        let median = if ITERATIONS % 2 == 0 {
-            (sorted_times[ITERATIONS / 2 - 1] + sorted_times[ITERATIONS / 2]) / 2
-        } else {
-            sorted_times[ITERATIONS / 2]
-        };
-        elapsed_median_map.insert(*opcode, median);
-    }
-
-    // Collect and sort the keys
-    let mut sorted_opcodes: Vec<&str> = elapsed_avg_map.keys().cloned().collect();
-    sorted_opcodes.sort();
-
-    let mut wtr = Writer::from_path("avg-opcode-time.csv").unwrap();
-    wtr.write_record(&["opcode", "avg_time", "median_time"]).unwrap();
-    for opcode in sorted_opcodes {
-        if let (Some(avg), Some(median)) = (
-            elapsed_avg_map.get(opcode),
-            elapsed_median_map.get(opcode),
-        ) {
-            wtr.write_record(&[
-                opcode,
-                &avg.to_string(),
-                &median.to_string(),
-            ]).unwrap();
-        }
-    }
-    wtr.flush().unwrap();
+    let interpreter = Interpreter::new(contract, 1_000_000_000, false);
+    (interpreter, bytecode_ptr)
 }
+
+fn get_eof_interpreter() -> (Interpreter) {
+    let mut bytecode = Eof::default();
+    let eof = Eof::encode_slow(&bytecode);
+
+    bytecode.body.types_section = Vec::with_capacity(1 << 10);
+    bytecode.body.types_section.resize(34000, TypesSection::default());
+    bytecode.body.code_section = Vec::with_capacity(1 << 10);
+    bytecode.body.code_section.resize(34000, revm_primitives::Bytes(Bytes::from_static(&[0x00])));
+    bytecode.body.container_section = Vec::with_capacity(1 << 10);
+    bytecode.body.container_section.resize(34000, eof);
+
+    let contract = Contract::new(revm_primitives::Bytes::default(), Bytecode::Eof(Arc::new(bytecode)), None, Address::ZERO, None, Address::ZERO, U256::ZERO);
+
+    let interpreter = Interpreter::new(contract, 1_000_000_000, false);
+    interpreter
+}
+
 
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);

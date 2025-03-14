@@ -1,5 +1,5 @@
 run-pi:
-	CARGO_TARGET_DIR=/mnt/sda/target nice -n -20 cargo run --jobs 1
+	CARGO_TARGET_DIR=/mnt/sda/target nice -n -20 cargo run --jobs 1 --no-cache
 
 run:
 	nice -n -20 cargo run --jobs 1

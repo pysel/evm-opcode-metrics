@@ -14,6 +14,7 @@ use revm_interpreter::{
     opcode::make_instruction_table,
     Contract, DummyHost
 };
+use revm_primitives::eof::TypesSection;
 use revm_primitives::Address;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -22,31 +23,49 @@ use core::arch::x86_64::_rdtsc;
 
 const ITERATIONS: usize = 1;
 
+const DIRTY_STACK_OPCODES: [&str; 11] = [
+    "LOG0", "LOG1", "LOG2", "LOG3", "LOG4", "CALL", "CALLCODE", "DELEGATECALL", "STATICCALL", "CREATE2", "CREATE"
+];
+
+const EOF_OPCODES: [&str; 18] = [
+    "DATALOAD",
+    "DATALOADN",
+    "DATASIZE",
+    "DATACOPY",
+    "RJUMP",
+    "RJUMPI",
+    "RJUMPV",
+    "CALLF",
+    "RETF",
+    "JUMPF",
+    "DUPN",
+    "SWAPN",
+    "EXCHANGE",
+    "EOFCREATE",
+    "RETURNDATALOAD",
+    "EXTCALL",
+    "EXTDELEGATECALL",
+    "EXTSTATICCALL",
+];
+
 pub fn opcodes_time() {
     let evm = Evm::builder().build();
     // let mut contract = Contract::default();
-    let eof = Arc::new(Eof::default());
+    // let eof = Arc::new(Eof::default());
 
-    // let bytecode = Bytecode::LegacyAnalyzed(LegacyAnalyzedBytecode::default());
-    // let jump_table = bytecode.legacy_jump_table().unwrap();
-    let mut bit_vec: BitVec<u8, Lsb0> = BitVec::new();
-    bit_vec.push(true);
-    bit_vec.push(true);
-    let jump_table = JumpTable::from_slice(bit_vec.as_raw_slice());
-    println!("{}", jump_table.is_valid(1));
-
-    let bytecode = LegacyAnalyzedBytecode::new(revm_primitives::Bytes(Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])), 1, jump_table);
-    let bytecode_ptr = bytecode.bytecode().as_ptr();
-    let contract = Contract::new(revm_primitives::Bytes::default(), Bytecode::LegacyAnalyzed(bytecode), None, Address::ZERO, None, Address::ZERO, U256::ZERO);
-
-    // return;
     
-    let mut interpreter = Interpreter::new(contract, 1_000_000_000, false);
+    let (interpreter_legacy, bytecode_ptr) = get_legacy_analyzed_interpreter();
+
+    let mut interpreter_eof = get_eof_interpreter();
+
+    let mut interpreter = interpreter_legacy;
+
     let mut host = DummyHost::new(*evm.context.evm.env.clone());
 
     // interpreter.is_eof = true;
-    for _ in 0..1000 {
-        interpreter.stack.push(U256::from(0));
+    for _ in 0..500 {
+        let _ = interpreter.stack.push(U256::from(0));
+        let _ = interpreter_eof.stack.push(U256::from(0));
     }
     
     let info_table = OPCODE_INFO_JUMPTABLE;
@@ -65,11 +84,21 @@ pub fn opcodes_time() {
 
             let op_code_info = info_table[index];
             if let Some(op_code_info) = op_code_info {
-                if op_code_info.name() == "LOG0" {
-                    for _ in 0..30 {
-                        interpreter.stack.push(U256::from(1));
+                if DIRTY_STACK_OPCODES.contains(&op_code_info.name()) {
+                    for _ in 0..7 {
+                        let _ = interpreter.stack.push(U256::from(1));
                     }
-                    println!("{}", interpreter.stack.len());
+                }
+
+                if EOF_OPCODES.contains(&op_code_info.name()) {
+                    for _ in 0..7 {
+                        let _ = interpreter_eof.stack.push(U256::from(0));
+                    }
+                    instruction(&mut interpreter_eof, &mut host);
+                    println!("{}: {:?}", op_code_info.name(), interpreter_eof.instruction_result);
+                    continue;
+                } else {
+                    interpreter.is_eof = false;
                 }
 
                 let now = Instant::now();
@@ -216,3 +245,37 @@ pub fn opcodes_cycles() {
 //     let bytecode = Bytecode::LegacyRaw(buf);
 //     bytecode
 // }
+
+fn get_legacy_analyzed_interpreter() -> (Interpreter, *const u8) {
+    let mut bit_vec: BitVec<u8, Lsb0> = BitVec::new();
+    bit_vec.push(true);
+    bit_vec.push(true);
+    let jump_table = JumpTable::from_slice(bit_vec.as_raw_slice());
+    println!("{}", jump_table.is_valid(1));
+
+    let bytecode = LegacyAnalyzedBytecode::new(revm_primitives::Bytes(Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])), 1, jump_table);
+    let bytecode_ptr = bytecode.bytecode().as_ptr();
+    let contract = Contract::new(revm_primitives::Bytes::default(), Bytecode::LegacyAnalyzed(bytecode), None, Address::ZERO, None, Address::ZERO, U256::ZERO);
+
+    // return;
+    
+    let interpreter = Interpreter::new(contract, 1_000_000_000, false);
+    (interpreter, bytecode_ptr)
+}
+
+fn get_eof_interpreter() -> (Interpreter) {
+    let mut bytecode = Eof::default();
+    let eof = Eof::encode_slow(&bytecode);
+
+    bytecode.body.types_section = Vec::with_capacity(1 << 10);
+    bytecode.body.types_section.resize(34000, TypesSection::default());
+    bytecode.body.code_section = Vec::with_capacity(1 << 10);
+    bytecode.body.code_section.resize(34000, revm_primitives::Bytes(Bytes::from_static(&[0x00])));
+    bytecode.body.container_section = Vec::with_capacity(1 << 10);
+    bytecode.body.container_section.resize(34000, eof);
+
+    let contract = Contract::new(revm_primitives::Bytes::default(), Bytecode::Eof(Arc::new(bytecode)), None, Address::ZERO, None, Address::ZERO, U256::ZERO);
+
+    let interpreter = Interpreter::new(contract, 1_000_000_000, false);
+    interpreter
+}
