@@ -21,4 +21,4 @@ def filter_csv(file1, file2, output_file):
                 writer.writerow(row)
 
 # File to filter | File to match keys | Output file
-filter_csv('avg-opcode-cycles-arm_sorted.csv', 'opcode_table.csv', 'avg-opcode-cycles-arm_sorted1.csv')
+filter_csv('avg-opcode-time-x86.csv', 'opcode_table.csv', 'avg-opcode-time-x86_sorted.csv')

@@ -132,7 +132,7 @@ fn get_legacy_analyzed_interpreter() -> (Interpreter, *const u8) {
 
     // return;
     
-    let interpreter = Interpreter::new(contract, 1_000_000_000, false);
+    let interpreter = Interpreter::new(contract, 1_000_000_000_000, false);
     (interpreter, bytecode_ptr)
 }
 
@@ -149,7 +149,7 @@ fn get_eof_interpreter() -> (Interpreter) {
 
     let contract = Contract::new(revm_primitives::Bytes::default(), Bytecode::Eof(Arc::new(bytecode)), None, Address::ZERO, None, Address::ZERO, U256::ZERO);
 
-    let interpreter = Interpreter::new(contract, 1_000_000_000, false);
+    let interpreter = Interpreter::new(contract, 1_000_000_000_000, false);
     interpreter
 }
 
