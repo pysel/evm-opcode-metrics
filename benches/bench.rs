@@ -3,8 +3,7 @@ use revm_primitives::{bitvec::{order::Lsb0, vec::BitVec}, eof::TypesSection, Add
 use revm::primitives::bytes::Bytes;
 use std::{sync::Arc, time::Instant};
 use std::collections::HashMap;
-use csv::Writer;
-use revm::primitives::{Eof};
+use revm::primitives::Eof;
 
 use revm::{
     interpreter::{Interpreter, OPCODE_INFO_JUMPTABLE},
@@ -47,73 +46,73 @@ const EOF_OPCODES: [&str; 18] = [
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let evm = Evm::builder().build();
-    // let mut contract = Contract::default();
-    // let eof = Arc::new(Eof::default());
-
-    
-    let (interpreter_legacy, bytecode_ptr) = get_legacy_analyzed_interpreter();
-
-    let mut interpreter_eof = get_eof_interpreter();
-
-    let mut interpreter = interpreter_legacy;
-
     let mut host = DummyHost::new(*evm.context.evm.env.clone());
 
-    // interpreter.is_eof = true;
-    for _ in 0..500 {
-        let _ = interpreter.stack.push(U256::from(0));
-        let _ = interpreter_eof.stack.push(U256::from(0));
-    }
-    
     let info_table = OPCODE_INFO_JUMPTABLE;
     let instruction_table = make_instruction_table::<DummyHost, CancunSpec>();
 
     let mut elapsed_map: HashMap<&str, Vec<u128>> = HashMap::new();
     for (index, instruction) in instruction_table.iter().enumerate() {
-        if index == 88 { 
-            // this is the opcode for program counter instruction. It expects the instruction counter 
-            // to be offset by 1.
-            interpreter.instruction_pointer = bytecode_ptr.wrapping_add(1);
-
-            println!("DATA: {:?}", unsafe { core::slice::from_raw_parts(interpreter.instruction_pointer, 1) });
-        }
+        let mut interpreter_eof = get_eof_interpreter();
 
         let op_code_info = info_table[index];
         if let Some(op_code_info) = op_code_info {
-            if DIRTY_STACK_OPCODES.contains(&op_code_info.name()) {
-                for _ in 0..7 {
-                    let _ = interpreter.stack.push(U256::from(1));
-                }
-            }
-
             if EOF_OPCODES.contains(&op_code_info.name()) {
                 for _ in 0..7 {
                     let _ = interpreter_eof.stack.push(U256::from(0));
                 }
-                instruction(&mut interpreter_eof, &mut host);
+                c.bench_function(op_code_info.name(), |b| b.iter(|| {
+                    println!("{}", interpreter_eof.stack.len());
+                    instruction(&mut interpreter_eof, &mut host);
+                }));
                 println!("{}: {:?}", op_code_info.name(), interpreter_eof.instruction_result);
                 continue;
-            } else {
-                interpreter.is_eof = false;
-            }
+            } 
 
             let now = Instant::now();
-            c.bench_function(op_code_info.name(), |b| b.iter(|| instruction(&mut interpreter, &mut host)));
-            
+            let mut result: revm_interpreter::InstructionResult = revm_interpreter::InstructionResult::Stop;
+            c.bench_function(op_code_info.name(), |b| {
+                b.iter_batched(
+                    || {
+                        let (mut interpreter, bytecode_ptr) = get_legacy_analyzed_interpreter();
+
+                        if index == 88 { 
+                            // this is the opcode for program counter instruction. It expects the instruction counter 
+                            // to be offset by 1.
+                            interpreter.instruction_pointer = bytecode_ptr.wrapping_add(1);
+
+                            println!("DATA: {:?}", unsafe { core::slice::from_raw_parts(interpreter.instruction_pointer, 1) });
+                        }
+                        // Create a mutable reference to interpreter for stack setup
+                        for _ in 0..50 {
+                            let _ = interpreter.stack.push(U256::from(0));
+                        }
+
+                        if DIRTY_STACK_OPCODES.contains(&op_code_info.name()) {
+                            for _ in 0..7 {
+                                let _ = interpreter.stack.push(U256::from(1));
+                            }
+                        }
+
+                        interpreter
+                    },
+                    |mut interpreter| {
+                        instruction(&mut interpreter, &mut host);
+                        result = interpreter.instruction_result;
+                    },
+                    criterion::BatchSize::SmallInput
+                );  
+            });
+
+            println!("{}: {:?}", op_code_info.name(), result);
             let elapsed = now.elapsed().as_nanos();
 
-            println!("{}: {:?}", op_code_info.name(), interpreter.instruction_result);
+            // println!("{}: {:?}", op_code_info.name(), interpreter.instruction_result);
             // Collect elapsed times in the vector for this opcode
             elapsed_map.entry(op_code_info.name())
                     .or_insert_with(Vec::new)
                     .push(elapsed);
 
-        }
-
-        if index == 88 { 
-            // this is the opcode for program counter instruction. It expects the instruction counter 
-            // to be offset by 1.
-            interpreter.instruction_pointer = bytecode_ptr;
         }
     }
 }
@@ -124,7 +123,6 @@ fn get_legacy_analyzed_interpreter() -> (Interpreter, *const u8) {
     bit_vec.push(true);
     bit_vec.push(true);
     let jump_table = JumpTable::from_slice(bit_vec.as_raw_slice());
-    println!("{}", jump_table.is_valid(1));
 
     let bytecode = LegacyAnalyzedBytecode::new(revm_primitives::Bytes(Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])), 1, jump_table);
     let bytecode_ptr = bytecode.bytecode().as_ptr();
@@ -136,7 +134,7 @@ fn get_legacy_analyzed_interpreter() -> (Interpreter, *const u8) {
     (interpreter, bytecode_ptr)
 }
 
-fn get_eof_interpreter() -> (Interpreter) {
+fn get_eof_interpreter() -> Interpreter {
     let mut bytecode = Eof::default();
     let eof = Eof::encode_slow(&bytecode);
 

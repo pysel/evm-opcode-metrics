@@ -54,26 +54,22 @@ pub fn opcodes_time() {
     // let eof = Arc::new(Eof::default());
 
     
-    let (interpreter_legacy, bytecode_ptr) = get_legacy_analyzed_interpreter();
-
-    let mut interpreter_eof = get_eof_interpreter();
-
-    let mut interpreter = interpreter_legacy;
-
     let mut host = DummyHost::new(*evm.context.evm.env.clone());
 
-    // interpreter.is_eof = true;
-    for _ in 0..500 {
-        let _ = interpreter.stack.push(U256::from(0));
-        let _ = interpreter_eof.stack.push(U256::from(0));
-    }
-    
     let info_table = OPCODE_INFO_JUMPTABLE;
     let instruction_table = make_instruction_table::<DummyHost, CancunSpec>();
 
     let mut elapsed_map: HashMap<&str, Vec<u128>> = HashMap::new();
     for _ in 0..ITERATIONS {
         for (index, instruction) in instruction_table.iter().enumerate() {
+            let mut interpreter_eof = get_eof_interpreter();
+
+            let (mut interpreter, bytecode_ptr) = get_legacy_analyzed_interpreter();
+            for _ in 0..50 {
+                let _ = interpreter.stack.push(U256::from(0));
+                let _ = interpreter_eof.stack.push(U256::from(0));
+            }
+
             if index == 88 { 
                 // this is the opcode for program counter instruction. It expects the instruction counter 
                 // to be offset by 1.
@@ -251,7 +247,6 @@ fn get_legacy_analyzed_interpreter() -> (Interpreter, *const u8) {
     bit_vec.push(true);
     bit_vec.push(true);
     let jump_table = JumpTable::from_slice(bit_vec.as_raw_slice());
-    println!("{}", jump_table.is_valid(1));
 
     let bytecode = LegacyAnalyzedBytecode::new(revm_primitives::Bytes(Bytes::from_static(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10])), 1, jump_table);
     let bytecode_ptr = bytecode.bytecode().as_ptr();
@@ -263,7 +258,7 @@ fn get_legacy_analyzed_interpreter() -> (Interpreter, *const u8) {
     (interpreter, bytecode_ptr)
 }
 
-fn get_eof_interpreter() -> (Interpreter) {
+fn get_eof_interpreter() -> Interpreter {
     let mut bytecode = Eof::default();
     let eof = Eof::encode_slow(&bytecode);
 
@@ -274,8 +269,10 @@ fn get_eof_interpreter() -> (Interpreter) {
     bytecode.body.container_section = Vec::with_capacity(1 << 10);
     bytecode.body.container_section.resize(34000, eof);
 
+
     let contract = Contract::new(revm_primitives::Bytes::default(), Bytecode::Eof(Arc::new(bytecode)), None, Address::ZERO, None, Address::ZERO, U256::ZERO);
 
     let interpreter = Interpreter::new(contract, 1_000_000_000, false);
+
     interpreter
 }
