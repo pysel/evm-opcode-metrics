@@ -57,20 +57,46 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
         let op_code_info = info_table[index];
         if let Some(op_code_info) = op_code_info {
+            // let mut result: revm_interpreter::InstructionResult = revm_interpreter::InstructionResult::Stop;
+
+            if op_code_info.name() != "RETF" {
+                continue;
+            }
+
             if EOF_OPCODES.contains(&op_code_info.name()) {
                 for _ in 0..7 {
                     let _ = interpreter_eof.stack.push(U256::from(0));
                 }
-                c.bench_function(op_code_info.name(), |b| b.iter(|| {
-                    println!("{}", interpreter_eof.stack.len());
-                    instruction(&mut interpreter_eof, &mut host);
-                }));
-                println!("{}: {:?}", op_code_info.name(), interpreter_eof.instruction_result);
+                c.bench_function(op_code_info.name(), |b| 
+                    b.iter_batched(
+                    || {
+                        let mut interpreter = get_eof_interpreter();
+
+                        // Create a mutable reference to interpreter for stack setup
+                        for _ in 0..50 {
+                            let _ = interpreter.stack.push(U256::from(0));
+                        }
+
+                        if DIRTY_STACK_OPCODES.contains(&op_code_info.name()) {
+                            for _ in 0..7 {
+                                let _ = interpreter.stack.push(U256::from(1));
+                            }
+                        }
+
+                        interpreter
+                    },
+                    |mut interpreter| {
+                        instruction(&mut interpreter, &mut host);
+                        // result = interpreter.instruction_result;
+                    },
+                    criterion::BatchSize::SmallInput
+                    )
+                );
+                // println!("{}: {:?}", op_code_info.name(), result);
                 continue;
             } 
 
             let now = Instant::now();
-            let mut result: revm_interpreter::InstructionResult = revm_interpreter::InstructionResult::Stop;
             c.bench_function(op_code_info.name(), |b| {
                 b.iter_batched(
                     || {
@@ -98,13 +124,13 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                     },
                     |mut interpreter| {
                         instruction(&mut interpreter, &mut host);
-                        result = interpreter.instruction_result;
+                        // result = interpreter.instruction_result;
                     },
                     criterion::BatchSize::SmallInput
                 );  
             });
 
-            println!("{}: {:?}", op_code_info.name(), result);
+            // println!("{}: {:?}", op_code_info.name(), result);
             let elapsed = now.elapsed().as_nanos();
 
             // println!("{}: {:?}", op_code_info.name(), interpreter.instruction_result);
@@ -149,6 +175,7 @@ fn get_eof_interpreter() -> Interpreter {
 
     let mut interpreter = Interpreter::new(contract, 1_000_000_000, false);
     interpreter.function_stack.push(0, 0);
+
     interpreter
 }
 
