@@ -4,7 +4,7 @@ run-pi:
 run:
 	nice -n -20 cargo run --jobs 1
 bench:
-	cargo bench --jobs 1
+	cargo bench --jobs 1 > benchmark_output.txt
 
 setup:
 	curl https://sh.rustup.rs -sSf | sh
