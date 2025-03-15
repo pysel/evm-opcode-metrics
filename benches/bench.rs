@@ -59,10 +59,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         if let Some(op_code_info) = op_code_info {
             // let mut result: revm_interpreter::InstructionResult = revm_interpreter::InstructionResult::Stop;
 
-            if op_code_info.name() != "RETF" {
-                continue;
-            }
-
             if EOF_OPCODES.contains(&op_code_info.name()) {
                 for _ in 0..7 {
                     let _ = interpreter_eof.stack.push(U256::from(0));
