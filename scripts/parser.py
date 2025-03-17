@@ -2,8 +2,8 @@ import re
 import csv
 
 def parse_benchmark_output(input_text):
-    # Regular expression to match the benchmark lines
-    pattern = r'opcodes/(\w+)\s+time:\s*\[\d+\.\d+ cycles (\d+\.\d+) cycles \d+\.\d+ cycles\]'
+    # Regular expression to match the benchmark lines with time in ns or µs
+    pattern = r'(\w+)\s+time:\s*\[\d+\.\d+\s+(ns|µs)\s+(\d+\.\d+)\s+(ns|µs)\s+\d+\.\d+\s+(ns|µs)\]'
     
     # Store results
     results = []
@@ -13,8 +13,16 @@ def parse_benchmark_output(input_text):
         match = re.search(pattern, line)
         if match:
             opcode = match.group(1)
-            median_cycles = float(match.group(2))
-            results.append({'opcode': opcode, 'value': median_cycles})
+            median_time = float(match.group(3))  # Getting the median time
+            time_unit = match.group(2)  # Getting the time unit
+            
+            # Convert to microseconds
+            if time_unit == 'µs':
+                median_time *= 1000  # Convert µs to ns
+            
+            # Truncate to 4 decimal places
+            median_time = round(median_time, 4)
+            results.append({'opcode': opcode, 'value': median_time})
     
     return results
 
@@ -25,7 +33,7 @@ def write_to_csv(results, output_file='avg-opcode-time-x86.csv'):
         writer.writerows(results)
 
 # Read the benchmark output from a file
-with open('../benchmark_output.txt', 'r') as f:
+with open('benchmark_output.txt', 'r') as f:
     benchmark_output = f.read()
 
 # Parse and write to CSV

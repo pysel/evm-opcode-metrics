@@ -102,8 +102,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                             // this is the opcode for program counter instruction. It expects the instruction counter 
                             // to be offset by 1.
                             interpreter.instruction_pointer = bytecode_ptr.wrapping_add(1);
-
-                            println!("DATA: {:?}", unsafe { core::slice::from_raw_parts(interpreter.instruction_pointer, 1) });
                         }
                         // Create a mutable reference to interpreter for stack setup
                         for _ in 0..50 {
