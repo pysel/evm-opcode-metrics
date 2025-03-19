@@ -44,6 +44,8 @@ const EOF_OPCODES: [&str; 18] = [
     "EXTSTATICCALL",
 ];
 
+const FIRST_HALF: bool = true;
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let evm = Evm::builder().build();
     let mut host = DummyHost::new(*evm.context.evm.env.clone());
@@ -53,6 +55,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let mut elapsed_map: HashMap<&str, Vec<u128>> = HashMap::new();
     for (index, instruction) in instruction_table.iter().enumerate() {
+        if FIRST_HALF && index >= instruction_table.len() / 2 {
+            break;
+        } else if !FIRST_HALF && index < instruction_table.len() / 2 {
+            continue;
+        }
+
         let mut interpreter_eof = get_eof_interpreter();
 
         let op_code_info = info_table[index];
