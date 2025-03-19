@@ -47,6 +47,7 @@ const EOF_OPCODES: [&str; 18] = [
 const FIRST_HALF: bool = true;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
+    let mut continue_flag = false;
     let evm = Evm::builder().build();
     let mut host = DummyHost::new(*evm.context.evm.env.clone());
 
@@ -66,6 +67,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let op_code_info = info_table[index];
         if let Some(op_code_info) = op_code_info {
             // let mut result: revm_interpreter::InstructionResult = revm_interpreter::InstructionResult::Stop;
+
+            if op_code_info.name() != "LOG2" || continue_flag {
+                continue;
+            }
+
+            continue_flag = true;
 
             if EOF_OPCODES.contains(&op_code_info.name()) {
                 for _ in 0..7 {

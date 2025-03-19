@@ -62,6 +62,11 @@ pub fn opcodes_time() {
     let mut elapsed_map: HashMap<&str, Vec<u128>> = HashMap::new();
     for _ in 0..ITERATIONS {
         for (index, instruction) in instruction_table.iter().enumerate() {
+            if false && index >= instruction_table.len() / 2 {
+                break;
+            } else if !false && index < instruction_table.len() / 2 {
+                continue;
+            }
             let mut interpreter_eof = get_eof_interpreter();
 
             let (mut interpreter, bytecode_ptr) = get_legacy_analyzed_interpreter();
